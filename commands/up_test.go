@@ -6,6 +6,7 @@ import (
 
 	"github.com/cloudfoundry/bosh-bootloader/bosh"
 	"github.com/cloudfoundry/bosh-bootloader/commands"
+	commandsFakes "github.com/cloudfoundry/bosh-bootloader/commands/fakes"
 	"github.com/cloudfoundry/bosh-bootloader/fakes"
 	"github.com/cloudfoundry/bosh-bootloader/storage"
 
@@ -19,7 +20,8 @@ var _ = Describe("Up", func() {
 		command commands.Up
 
 		fakeAWSUp       *fakes.AWSUp
-		fakeGCPUp       *fakes.GCPUp
+		fakeAzureUp     *commandsFakes.AzureUp
+		fakeGCPUp       *commandsFakes.GCPUp
 		fakeEnvGetter   *fakes.EnvGetter
 		fakeBOSHManager *fakes.BOSHManager
 		state           storage.State
@@ -27,12 +29,14 @@ var _ = Describe("Up", func() {
 
 	BeforeEach(func() {
 		fakeAWSUp = &fakes.AWSUp{Name: "aws"}
-		fakeGCPUp = &fakes.GCPUp{Name: "gcp"}
+		fakeGCPUp = &commandsFakes.GCPUp{}
+		fakeAzureUp = &commandsFakes.AzureUp{}
+		// fakeAzureUp = &commandsFakes.AzureUp{Name: "azure"}
 		fakeEnvGetter = &fakes.EnvGetter{}
 		fakeBOSHManager = &fakes.BOSHManager{}
 		fakeBOSHManager.VersionCall.Returns.Version = "2.0.24"
 
-		command = commands.NewUp(fakeAWSUp, fakeGCPUp, fakeEnvGetter, fakeBOSHManager)
+		command = commands.NewUp(fakeAWSUp, fakeGCPUp, fakeAzureUp, fakeEnvGetter, fakeBOSHManager)
 	})
 
 	Describe("CheckFastFails", func() {
@@ -239,7 +243,8 @@ var _ = Describe("Up", func() {
 				}, storage.State{})
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(fakeGCPUp.ExecuteCall.Receives.GCPUpConfig).To(Equal(commands.GCPUpConfig{
+				config, _ := fakeGCPUp.ExecuteArgsForCall(0)
+				Expect(config).To(Equal(commands.GCPUpConfig{
 					ServiceAccountKey: "some-service-account-key-env",
 					ProjectID:         "some-project-id-env",
 					Zone:              "some-zone-env",
@@ -265,13 +270,14 @@ var _ = Describe("Up", func() {
 				}, storage.State{Version: 999})
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(fakeGCPUp.ExecuteCall.Receives.GCPUpConfig).To(Equal(commands.GCPUpConfig{
+				config, state := fakeGCPUp.ExecuteArgsForCall(0)
+				Expect(config).To(Equal(commands.GCPUpConfig{
 					ServiceAccountKey: "some-service-account-key-env",
 					ProjectID:         "some-project-id-env",
 					Zone:              "some-zone-env",
 					Region:            "some-region-env",
 				}))
-				Expect(fakeGCPUp.ExecuteCall.Receives.State).To(Equal(storage.State{
+				Expect(state).To(Equal(storage.State{
 					Version: 999,
 				}))
 			})
@@ -282,7 +288,8 @@ var _ = Describe("Up", func() {
 				err := command.Execute(args, state)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(fakeGCPUp.ExecuteCall.Receives.GCPUpConfig).To(Equal(expectedConfig))
+				config, _ := fakeGCPUp.ExecuteArgsForCall(0)
+				Expect(config).To(Equal(expectedConfig))
 			},
 				Entry("precedence to service account key",
 					[]string{"--gcp-service-account-key", "some-service-account-key-from-args"},
@@ -335,7 +342,8 @@ var _ = Describe("Up", func() {
 					"--gcp-region", "some-region",
 				}, storage.State{})
 				Expect(err).NotTo(HaveOccurred())
-				Expect(fakeGCPUp.ExecuteCall.CallCount).To(Equal(1))
+				Expect(fakeGCPUp.ExecuteCallCount()).To(Equal(1))
+				Expect(fakeAzureUp.ExecuteCallCount()).To(Equal(0))
 				Expect(fakeAWSUp.ExecuteCall.CallCount).To(Equal(0))
 			})
 
@@ -351,8 +359,7 @@ var _ = Describe("Up", func() {
 					"--gcp-region", "some-region",
 				}, storage.State{})
 				Expect(err).NotTo(HaveOccurred())
-				Expect(fakeGCPUp.ExecuteCall.CallCount).To(Equal(1))
-				Expect(fakeAWSUp.ExecuteCall.CallCount).To(Equal(0))
+				Expect(fakeGCPUp.ExecuteCallCount()).To(Equal(1))
 			})
 
 			Context("when desired iaas is gcp", func() {
@@ -366,8 +373,9 @@ var _ = Describe("Up", func() {
 					}, storage.State{})
 					Expect(err).NotTo(HaveOccurred())
 
-					Expect(fakeGCPUp.ExecuteCall.CallCount).To(Equal(1))
-					Expect(fakeGCPUp.ExecuteCall.Receives.GCPUpConfig).To(Equal(commands.GCPUpConfig{
+					config, _ := fakeGCPUp.ExecuteArgsForCall(0)
+					Expect(fakeGCPUp.ExecuteCallCount()).To(Equal(1))
+					Expect(config).To(Equal(commands.GCPUpConfig{
 						ServiceAccountKey: "some-service-account-key",
 						ProjectID:         "some-project-id",
 						Zone:              "some-zone",
@@ -387,8 +395,9 @@ var _ = Describe("Up", func() {
 					}, storage.State{})
 					Expect(err).NotTo(HaveOccurred())
 
-					Expect(fakeGCPUp.ExecuteCall.CallCount).To(Equal(1))
-					Expect(fakeGCPUp.ExecuteCall.Receives.GCPUpConfig).To(Equal(commands.GCPUpConfig{
+					config, _ := fakeGCPUp.ExecuteArgsForCall(0)
+					Expect(fakeGCPUp.ExecuteCallCount()).To(Equal(1))
+					Expect(config).To(Equal(commands.GCPUpConfig{
 						ServiceAccountKey: "some-service-account-key",
 						ProjectID:         "some-project-id",
 						Zone:              "some-zone",
@@ -396,26 +405,17 @@ var _ = Describe("Up", func() {
 					}))
 				})
 
-				Context("when the --jumpbox flag is specified", func() {
-					It("executes the GCP up with gcp details from args", func() {
+				Context("when the user provides the jumpbox flag", func() {
+					It("executes the GCP up with jumpbox set to true", func() {
 						err := command.Execute([]string{
 							"--iaas", "gcp",
 							"--jumpbox",
-							"--gcp-service-account-key", "some-service-account-key",
-							"--gcp-project-id", "some-project-id",
-							"--gcp-zone", "some-zone",
-							"--gcp-region", "some-region",
 						}, storage.State{})
 						Expect(err).NotTo(HaveOccurred())
 
-						Expect(fakeGCPUp.ExecuteCall.CallCount).To(Equal(1))
-						Expect(fakeGCPUp.ExecuteCall.Receives.GCPUpConfig).To(Equal(commands.GCPUpConfig{
-							ServiceAccountKey: "some-service-account-key",
-							ProjectID:         "some-project-id",
-							Zone:              "some-zone",
-							Region:            "some-region",
-							Jumpbox:           true,
-						}))
+						config, _ := fakeGCPUp.ExecuteArgsForCall(0)
+						Expect(fakeGCPUp.ExecuteCallCount()).To(Equal(1))
+						Expect(config.Jumpbox).To(Equal(true))
 					})
 				})
 			})
@@ -437,6 +437,28 @@ var _ = Describe("Up", func() {
 						SecretAccessKey: "some-secret-access-key",
 						Region:          "some-region",
 						BOSHAZ:          "some-bosh-az",
+					}))
+				})
+			})
+
+			Context("when the desired iaas is azure", func() {
+				It("executes Azure up", func() {
+					err := command.Execute([]string{
+						"--iaas", "azure",
+						"--azure-subscription-id", "subscription-id",
+						"--azure-tenant-id", "tenant-id",
+						"--azure-client-id", "client-id",
+						"--azure-client-secret", "client-secret",
+					}, storage.State{})
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(fakeAzureUp.ExecuteCallCount()).To(Equal(1))
+					config := fakeAzureUp.ExecuteArgsForCall(0)
+					Expect(config).To(Equal(commands.AzureUpConfig{
+						SubscriptionID: "subscription-id",
+						TenantID:       "tenant-id",
+						ClientID:       "client-id",
+						ClientSecret:   "client-secret",
 					}))
 				})
 			})
@@ -500,8 +522,8 @@ var _ = Describe("Up", func() {
 					err := command.Execute([]string{}, storage.State{IAAS: "gcp"})
 					Expect(err).NotTo(HaveOccurred())
 
-					Expect(fakeGCPUp.ExecuteCall.CallCount).To(Equal(1))
-					Expect(fakeGCPUp.ExecuteCall.Receives.State).To(Equal(storage.State{
+					_, state := fakeGCPUp.ExecuteArgsForCall(0)
+					Expect(state).To(Equal(storage.State{
 						IAAS: "gcp",
 					}))
 				})
@@ -538,20 +560,10 @@ var _ = Describe("Up", func() {
 				}, storage.State{})
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(fakeGCPUp.ExecuteCall.Receives.GCPUpConfig.NoDirector).To(Equal(true))
+				config, _ := fakeGCPUp.ExecuteArgsForCall(0)
+				Expect(config.NoDirector).To(Equal(true))
 			})
 		})
 
-		Context("when the user provides the jumpbox flag", func() {
-			It("passes jumpbox as true in the up config", func() {
-				err := command.Execute([]string{
-					"--iaas", "gcp",
-					"--jumpbox",
-				}, storage.State{})
-				Expect(err).NotTo(HaveOccurred())
-
-				Expect(fakeGCPUp.ExecuteCall.Receives.GCPUpConfig.Jumpbox).To(Equal(true))
-			})
-		})
 	})
 })

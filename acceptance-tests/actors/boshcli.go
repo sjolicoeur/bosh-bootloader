@@ -12,7 +12,7 @@ func NewBOSHCLI() BOSHCLI {
 }
 
 func (BOSHCLI) DirectorExists(address, caCertPath string) (bool, error) {
-	_, err := exec.Command("bosh",
+	_, err := exec.Command("bosh2",
 		"--ca-cert", caCertPath,
 		"-e", address,
 		"env",
@@ -22,7 +22,7 @@ func (BOSHCLI) DirectorExists(address, caCertPath string) (bool, error) {
 }
 
 func (BOSHCLI) Env(address, caCertPath string) (string, error) {
-	env, err := exec.Command("bosh",
+	env, err := exec.Command("bosh2",
 		"--ca-cert", caCertPath,
 		"-e", address,
 		"env",
@@ -32,7 +32,7 @@ func (BOSHCLI) Env(address, caCertPath string) (string, error) {
 }
 
 func (BOSHCLI) CloudConfig(address, caCertPath, username, password string) (string, error) {
-	cloudConfig, err := exec.Command("bosh",
+	cloudConfig, err := exec.Command("bosh2",
 		"--ca-cert", caCertPath,
 		"--client", username,
 		"--client-secret", password,
@@ -45,7 +45,7 @@ func (BOSHCLI) CloudConfig(address, caCertPath, username, password string) (stri
 
 func (BOSHCLI) DeleteEnv(stateFilePath, manifestPath string) error {
 	_, err := exec.Command(
-		"bosh",
+		"bosh2",
 		"delete-env",
 		fmt.Sprintf("--state=%s", stateFilePath),
 		manifestPath,

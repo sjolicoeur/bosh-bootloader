@@ -11,6 +11,7 @@ import (
 type Up struct {
 	awsUp       awsUp
 	gcpUp       gcpUp
+	azureUp     azureUp
 	envGetter   envGetter
 	boshManager boshManager
 }
@@ -19,8 +20,14 @@ type awsUp interface {
 	Execute(awsUpConfig AWSUpConfig, state storage.State) error
 }
 
+//go:generate counterfeiter -o ./fakes/gcp_up.go --fake-name GCPUp . gcpUp
 type gcpUp interface {
 	Execute(gcpUpConfig GCPUpConfig, state storage.State) error
+}
+
+//go:generate counterfeiter -o ./fakes/azure_up.go --fake-name AzureUp . azureUp
+type azureUp interface {
+	Execute(azureUpConfig AzureUpConfig) error
 }
 
 type envGetter interface {
@@ -36,6 +43,10 @@ type upConfig struct {
 	gcpProjectID         string
 	gcpZone              string
 	gcpRegion            string
+	azureClientSecret    string
+	azureTenantID        string
+	azureClientID        string
+	azureSubscriptionID  string
 	iaas                 string
 	name                 string
 	opsFile              string
@@ -43,10 +54,11 @@ type upConfig struct {
 	jumpbox              bool
 }
 
-func NewUp(awsUp awsUp, gcpUp gcpUp, envGetter envGetter, boshManager boshManager) Up {
+func NewUp(awsUp awsUp, gcpUp gcpUp, azureUp azureUp, envGetter envGetter, boshManager boshManager) Up {
 	return Up{
 		awsUp:       awsUp,
 		gcpUp:       gcpUp,
+		azureUp:     azureUp,
 		envGetter:   envGetter,
 		boshManager: boshManager,
 	}
@@ -116,6 +128,17 @@ func (u Up) Execute(args []string, state storage.State) error {
 			NoDirector:        config.noDirector,
 			Jumpbox:           config.jumpbox,
 		}, state)
+	case "azure":
+		err = u.azureUp.Execute(AzureUpConfig{
+			SubscriptionID: config.azureSubscriptionID,
+			TenantID:       config.azureTenantID,
+			ClientID:       config.azureClientID,
+			ClientSecret:   config.azureClientSecret,
+		})
+		if err != nil {
+			panic(err)
+		}
+
 	default:
 		return fmt.Errorf("%q is an invalid iaas type, supported values are: [gcp, aws]", desiredIAAS)
 	}
@@ -143,6 +166,11 @@ func (u Up) parseArgs(args []string) (upConfig, error) {
 	upFlags.String(&config.gcpProjectID, "gcp-project-id", u.envGetter.Get("BBL_GCP_PROJECT_ID"))
 	upFlags.String(&config.gcpZone, "gcp-zone", u.envGetter.Get("BBL_GCP_ZONE"))
 	upFlags.String(&config.gcpRegion, "gcp-region", u.envGetter.Get("BBL_GCP_REGION"))
+
+	upFlags.String(&config.azureSubscriptionID, "azure-subscription-id", "")
+	upFlags.String(&config.azureTenantID, "azure-tenant-id", "")
+	upFlags.String(&config.azureClientID, "azure-client-id", "")
+	upFlags.String(&config.azureClientSecret, "azure-client-secret", "")
 
 	upFlags.String(&config.name, "name", "")
 	upFlags.String(&config.opsFile, "ops-file", "")

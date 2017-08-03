@@ -211,6 +211,10 @@ func main() {
 		GCPAvailabilityZoneRetriever: gcpAvailabilityZoneRetriever,
 	})
 
+	azureUp := commands.NewAzureUp(commands.NewAzureUpArgs{
+		Logger: logger,
+	})
+
 	gcpCreateLBs := commands.NewGCPCreateLBs(terraformManager, cloudConfigManager, stateStore, logger, gcpEnvironmentValidator, gcpAvailabilityZoneRetriever)
 
 	gcpLBs := commands.NewGCPLBs(terraformManager, logger)
@@ -220,7 +224,7 @@ func main() {
 	// Commands
 	commandSet[commands.HelpCommand] = usage
 	commandSet[commands.VersionCommand] = commands.NewVersion(Version, logger)
-	commandSet[commands.UpCommand] = commands.NewUp(awsUp, gcpUp, envGetter, boshManager)
+	commandSet[commands.UpCommand] = commands.NewUp(awsUp, gcpUp, azureUp, envGetter, boshManager)
 	commandSet[commands.DestroyCommand] = commands.NewDestroy(
 		credentialValidator, logger, os.Stdin, boshManager, vpcStatusChecker, stackManager,
 		infrastructureManager, awsKeyPairDeleter, gcpKeyPairDeleter, certificateDeleter,
